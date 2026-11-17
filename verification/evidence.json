@@ -1,0 +1,19 @@
+{
+  "claim": "On Linux, read() on a pipe's read end returns 0 (end-of-file) only after EVERY descriptor referring to the write end is closed. If a dup()/fork() copy of the write end is still open, read() on an empty pipe blocks (or fails with EAGAIN when O_NONBLOCK is set) instead of returning 0.",
+  "source_url": "https://man7.org/linux/man-pages/man7/pipe.7.html",
+  "source_says": "pipe(7), Linux man-pages 6.19 (2026-07-10), section 'I/O on pipes and FIFOs': if all file descriptors referring to the write end have been closed, read(2) sees end-of-file and returns 0; reading an empty pipe blocks until data is available; with O_NONBLOCK and a process that still has the pipe open for writing, reads fail with EAGAIN. If all read-end descriptors are closed, write(2) raises SIGPIPE, and fails with EPIPE if the signal is ignored.",
+  "test_command": "clang++-22 -std=c++23 -Wall -Wextra -Iinclude src/unique_fd.cpp src/pipe.cpp verification/eof_dup_test.cpp -o /tmp/eof_dup_test && /tmp/eof_dup_test  (run from the repository root inside Docker image ubuntu:24.04 + clang 22.1.8, on an Apple Silicon Mac)",
+  "observed": "With a dup() copy of the write end still open: read() -> -1, errno EAGAIN (no EOF). After closing the copy as well: read() -> 0 (EOF). Writing to a pipe with its read end closed and SIGPIPE ignored: write() -> -1, errno EPIPE. Output ended with 'ALL CHECKS PASSED', exit code 0.",
+  "ai_answers": {
+    "A_sonnet": "verification/answer_A_sonnet.md",
+    "B_haiku": "verification/answer_B_haiku.md",
+    "agreement": "Both answers make the same main claim. Agreement alone is not evidence; the documentation and the test above are the evidence.",
+    "disagreements_or_doubtful_claims": [
+      "Answer A says writing could avoid SIGPIPE by using send() with MSG_NOSIGNAL, then says this does not apply to plain write() on pipes. That part is confusing. send() is a socket call, so check send(2) before trusting it. Not tested.",
+      "Answer B says SIGPIPE is raised 'in the calling thread' and that a blocked SIGPIPE also gives EPIPE. pipe(7) only mentions the ignored case. Not tested.",
+      "Answer B's wording 'the kernel counts open file descriptions' is imprecise: dup() does not create a new open file description, it adds another descriptor that refers to the same one."
+    ]
+  },
+  "uncertainty": "The test is run in only one environment (Docker Linux VM on macOS) and with only one way of copying a descriptor (dup() in one process). The fork() case and the 'SIGPIPE default action kills the process' claim come from documentation only and were not tested.",
+  "verdict": "accept"
+}

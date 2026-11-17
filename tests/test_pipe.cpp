@@ -95,6 +95,30 @@ TEST(Pipe, MovingTransfersBothEnds) {
     EXPECT_EQ(target.write_end().get(), writer);
 }
 
+TEST(Pipe, MoveAssignmentClosesDestinationsOldEnds) {
+    auto target = miniposix::Pipe::create();
+    auto source = miniposix::Pipe::create();
+    const int old_reader = target.read_end().get();
+    const int old_writer = target.write_end().get();
+    const int new_reader = source.read_end().get();
+    const int new_writer = source.write_end().get();
+    ASSERT_TRUE(is_open(old_reader));
+    ASSERT_TRUE(is_open(old_writer));
+
+    target = std::move(source);
+
+    // Checking only the wrapper values would miss a leak: they would look
+    // right even if the old descriptors were never closed.
+    EXPECT_EQ(target.read_end().get(), new_reader);
+    EXPECT_EQ(target.write_end().get(), new_writer);
+    EXPECT_EQ(source.read_end().get(), -1);
+    EXPECT_EQ(source.write_end().get(), -1);
+    EXPECT_FALSE(is_open(old_reader));
+    EXPECT_FALSE(is_open(old_writer));
+    EXPECT_TRUE(is_open(new_reader));
+    EXPECT_TRUE(is_open(new_writer));
+}
+
 TEST(Pipe, ReportsCreationFailureWithOperatingSystemError) {
     struct rlimit original {};
     ASSERT_EQ(::getrlimit(RLIMIT_NOFILE, &original), 0);
